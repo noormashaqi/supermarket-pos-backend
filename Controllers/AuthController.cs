@@ -3,13 +3,15 @@ using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SupermarketSystem.Api.Common;
+using SupermarketSystem.Api.Constants;
 using SupermarketSystem.Api.DTOs.Auth;
 using SupermarketSystem.Api.Features.Auth.Login;
 using SupermarketSystem.Api.Features.Auth.Logout;
 using SupermarketSystem.Api.Features.Auth.Me;
 using SupermarketSystem.Api.Features.Auth.RefreshToken;
 using SupermarketSystem.Api.Features.Auth.ResetPassword;
-using SupermarketSystem.Api.Features.Auth.SignUp;
+using SupermarketSystem.Api.Features.Employees;
 
 namespace SupermarketSystem.Api.Controllers;
 
@@ -25,25 +27,28 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("sign-up")]
-    [AllowAnonymous]
-    public async Task<ActionResult<LoginResponseDto>> SignUp([FromBody] SignUpRequestDto request)
+    [Authorize(Roles = "Admin")]
+    [PermissionRequirement(PermissionKeys.EmployeesCreate)]
+    public async Task<ActionResult<EmployeeResponse>> SignUp(
+        [FromBody] SignUpRequestDto request,
+        CancellationToken cancellationToken)
     {
-        var result = await _mediator.Send(new SignUpCommand
+        var result = await _mediator.Send(new CreateEmployeeCommand
         {
             FullName = request.FullName,
             Username = request.Username,
             Password = request.Password,
             Role = request.Role
-        });
+        }, cancellationToken);
 
         if (!result.Success)
         {
             return result.ErrorCode == "UsernameAlreadyExists"
-                ? Conflict(new { message = result.ErrorMessage })
-                : BadRequest(new { message = result.ErrorMessage });
+                ? Conflict(new { message = result.Message })
+                : BadRequest(new { message = result.Message });
         }
 
-        return Created(string.Empty, result.Data);
+        return Created(string.Empty, result.Employee);
     }
 
     [HttpPost("sign-in")]
