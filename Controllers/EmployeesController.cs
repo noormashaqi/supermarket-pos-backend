@@ -1,10 +1,11 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SupermarketSystem.Api.Common;
 using SupermarketSystem.Api.Constants;
 using SupermarketSystem.Api.Features.Employees;
-using SupermarketSystem.Api.Services.Permissions;
-using Microsoft.AspNetCore.Authorization;
 
 namespace SupermarketSystem.Api.Controllers;
 
@@ -72,6 +73,7 @@ public class EmployeesController : ControllerBase
 
     // POST /api/employees
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     [PermissionRequirement(PermissionKeys.EmployeesCreate)]
     public async Task<ActionResult<EmployeeResponse>> CreateEmployee(
         CreateEmployeeCommand command,
@@ -139,13 +141,14 @@ public class EmployeesController : ControllerBase
 
     // PATCH /api/employees/{id}/deactivate
     [HttpPatch("{id:long}/deactivate")]
+    [Authorize(Roles = "Admin")]
     [PermissionRequirement(PermissionKeys.EmployeesDeactivate)]
     public async Task<IActionResult> DeactivateEmployee(
         long id,
         CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(
-            new DeactivateEmployeeCommand(id),
+            new SetEmployeeStatusCommand(id, false, GetCurrentEmployeeId()),
             cancellationToken);
 
 
@@ -162,5 +165,72 @@ public class EmployeesController : ControllerBase
         {
             message = result.Message
         });
+    }
+
+    // PATCH /api/employees/{id}/activate
+    [HttpPatch("{id:long}/activate")]
+    [Authorize(Roles = "Admin")]
+    [PermissionRequirement(PermissionKeys.EmployeesDeactivate)]
+    public async Task<IActionResult> ActivateEmployee(
+        long id,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new SetEmployeeStatusCommand(id, true, GetCurrentEmployeeId()),
+            cancellationToken);
+
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Message
+            });
+        }
+
+
+        return Ok(new
+        {
+            message = result.Message
+        });
+    }
+
+    // PATCH /api/employees/{id}/status
+    [HttpPatch("{id:long}/status")]
+    [Authorize(Roles = "Admin")]
+    [PermissionRequirement(PermissionKeys.EmployeesDeactivate)]
+    public async Task<IActionResult> SetEmployeeStatus(
+        long id,
+        [FromBody] SetEmployeeStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _mediator.Send(
+            new SetEmployeeStatusCommand(id, request.IsActive, GetCurrentEmployeeId()),
+            cancellationToken);
+
+
+        if (!result.Success)
+        {
+            return BadRequest(new
+            {
+                message = result.Message
+            });
+        }
+
+
+        return Ok(new
+        {
+            message = result.Message
+        });
+    }
+
+    private long? GetCurrentEmployeeId()
+    {
+        var employeeIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)
+            ?? User.FindFirst(ClaimTypes.NameIdentifier);
+
+        return employeeIdClaim is not null && long.TryParse(employeeIdClaim.Value, out var employeeId)
+            ? employeeId
+            : null;
     }
 }

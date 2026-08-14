@@ -30,6 +30,7 @@ public class JwtService : IJwtService
         {
             new(JwtRegisteredClaimNames.Sub, employee.Id.ToString()),
             new(ClaimTypes.Name, employee.Username),
+            new(ClaimTypes.Role, employee.Role),
             new("fullName", employee.FullName),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
