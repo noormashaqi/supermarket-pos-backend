@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS AttendanceLogs
 
     CONSTRAINT FK_AttendanceLogs_Employees
         FOREIGN KEY (EmployeeId)
-        REFERENCES Employees(Id),
-
-    INDEX IX_AttendanceLogs_EmployeeId (EmployeeId),
-    INDEX IX_AttendanceLogs_LoginTime (LoginTime)
+        REFERENCES Employees(Id)
 );
+
+CREATE INDEX IF NOT EXISTS IX_AttendanceLogs_EmployeeId ON AttendanceLogs(EmployeeId);
+CREATE INDEX IF NOT EXISTS IX_AttendanceLogs_LoginTime ON AttendanceLogs(LoginTime);

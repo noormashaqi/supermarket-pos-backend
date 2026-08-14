@@ -31,6 +31,23 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.Strict;
     });
 
+// 3.1️⃣ إضافة إعدادات الـ CORS للسماح لـ React بالاتصال
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins(
+                    "http://localhost:5173", 
+                    "http://localhost:5174", 
+                    "http://127.0.0.1:5173", 
+                    "http://127.0.0.1:5174"
+              )
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 // 4️⃣ إضافة MediatR و FluentValidation
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
 builder.Services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
@@ -100,6 +117,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// ⚠️ تفعيل الـ CORS قبل Authentication و Authorization
+app.UseCors("AllowFrontend");
 
 // 5.2️⃣ Authentication + Authorization (قبل MapControllers)
 app.UseAuthentication();
