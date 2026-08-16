@@ -105,9 +105,17 @@ public class InvoicesController : ControllerBase
         if (employeeId is null)
             return Unauthorized();
 
+        // تحويل قائمة الأصناف من ExchangeItemDto إلى ExchangeItemInput
+        var newItems = body.NewItems?.Select(item => new ExchangeItemInput(item.ProductId, item.Quantity)).ToList()
+                       ?? new List<ExchangeItemInput>();
+
         var command = new ExchangeCommand(
-            id, body.OldProductId, body.QuantityReturned,
-            body.NewProductId, body.NewQuantity, employeeId.Value, body.Reason);
+            id,
+            body.OldProductId,
+            body.QuantityReturned,
+            newItems,
+            employeeId.Value,
+            body.Reason);
 
         var result = await _mediator.Send(command, cancellationToken);
         return Ok(result);

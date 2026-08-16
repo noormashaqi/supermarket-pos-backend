@@ -21,7 +21,7 @@ public class ExchangeHandler : IRequestHandler<ExchangeCommand, ExchangeResult>
 
         try
         {
-            // 1) الفحص التراكمي على الصنف القديم (نفس منطق Pure Return بالضبط)
+            // 1) الفحص التراكمي على الصنف القديم (نفس منطق Pure Return)
             var originalQuantity = await connection.ExecuteScalarAsync<int?>(
                 new CommandDefinition(
                     @"SELECT Quantity FROM InvoiceItems
@@ -48,25 +48,38 @@ public class ExchangeHandler : IRequestHandler<ExchangeCommand, ExchangeResult>
                 throw new InvalidOperationException(
                     $"Return quantity exceeds original sold quantity. Sold: {originalQuantity}, already returned: {alreadyReturned}, requested: {request.QuantityReturned}.");
 
-            // 2) قفل المنتج الجديد والتحقق من توفر مخزونه
-            var newProduct = await connection.QuerySingleOrDefaultAsync<NewProductStockDto>(
-                new CommandDefinition(
-                    "SELECT Id, Name, SellingPrice, Quantity, IsActive FROM product WHERE Id = @Id FOR UPDATE",
-                    new { Id = request.NewProductId },
-                    transaction: transaction,
-                    cancellationToken: cancellationToken));
+            // 2) التحقق من وجود قائمة العناصر الجديدة وتوفر المخزون وحساب إجمالي الفاتورة الجديدة
+            if (request.NewItems is null || !request.NewItems.Any())
+                throw new InvalidOperationException("Exchange request must contain at least one new item.");
 
-            if (newProduct is null)
-                throw new InvalidOperationException($"Product {request.NewProductId} not found.");
+            decimal totalInvoiceAmount = 0;
+            var validatedNewItems = new List<(NewProductStockDto Product, int Quantity, decimal LineTotal)>();
 
-            if (!newProduct.IsActive)
-                throw new InvalidOperationException($"Product {request.NewProductId} is deactivated and cannot be sold.");
+            foreach (var newItem in request.NewItems)
+            {
+                var newProduct = await connection.QuerySingleOrDefaultAsync<NewProductStockDto>(
+                    new CommandDefinition(
+                        "SELECT Id, Name, SellingPrice, Quantity, IsActive FROM product WHERE Id = @Id FOR UPDATE",
+                        new { Id = newItem.ProductId },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
 
-            if (request.NewQuantity > newProduct.Quantity)
-                throw new InvalidOperationException(
-                    $"Insufficient stock for product {request.NewProductId}. Available: {newProduct.Quantity}, requested: {request.NewQuantity}.");
+                if (newProduct is null)
+                    throw new InvalidOperationException($"Product {newItem.ProductId} not found.");
 
-            // 3) رجوع الصنف القديم للمخزون
+                if (!newProduct.IsActive)
+                    throw new InvalidOperationException($"Product '{newProduct.Name}' (ID: {newItem.ProductId}) is deactivated and cannot be sold.");
+
+                if (newItem.Quantity > newProduct.Quantity)
+                    throw new InvalidOperationException(
+                        $"Insufficient stock for product '{newProduct.Name}'. Available: {newProduct.Quantity}, requested: {newItem.Quantity}.");
+
+                var lineTotal = newProduct.SellingPrice * newItem.Quantity;
+                totalInvoiceAmount += lineTotal;
+                validatedNewItems.Add((newProduct, newItem.Quantity, lineTotal));
+            }
+
+            // 3) إرجاع الصنف القديم للمخزون
             await connection.ExecuteAsync(
                 new CommandDefinition(
                     "UPDATE product SET Quantity = Quantity + @Qty WHERE Id = @ProductId",
@@ -74,7 +87,7 @@ public class ExchangeHandler : IRequestHandler<ExchangeCommand, ExchangeResult>
                     transaction: transaction,
                     cancellationToken: cancellationToken));
 
-            // 4) توليد InvoiceNumber للفاتورة الجديدة (نفس منطق تاريخ + رقم يومي المتفق عليه)
+            // 4) توليد InvoiceNumber للفاتورة الجديدة
             var today = DateTime.UtcNow.Date;
             var todayPrefix = today.ToString("yyyyMMdd");
 
@@ -91,9 +104,7 @@ public class ExchangeHandler : IRequestHandler<ExchangeCommand, ExchangeResult>
             var nextSequence = (lastSequence ?? 0) + 1;
             var newInvoiceNumber = $"{todayPrefix}-{nextSequence:D3}";
 
-            // 5) إنشاء فاتورة جديدة للصنف البديل فقط (بدون خصم، Exchange ما فيها Discount حسب التحليل)
-            var lineTotal = newProduct.SellingPrice * request.NewQuantity;
-
+            // 5) إنشاء الفاتورة الجديدة بإجمالي المبالغ للعناصر الجديدة
             var newInvoiceId = await connection.ExecuteScalarAsync<long>(
                 new CommandDefinition(
                     @"INSERT INTO invoices
@@ -106,39 +117,41 @@ public class ExchangeHandler : IRequestHandler<ExchangeCommand, ExchangeResult>
                         InvoiceNumber = newInvoiceNumber,
                         request.EmployeeId,
                         Date = DateTime.UtcNow,
-                        Total = lineTotal
+                        Total = totalInvoiceAmount
                     },
                     transaction: transaction,
                     cancellationToken: cancellationToken));
 
-            // 6) إدخال InvoiceItem للفاتورة الجديدة (Snapshot للاسم والسعر)
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    @"INSERT INTO InvoiceItems
-                        (InvoiceId, ProductId, ProductNameSnapshot, UnitPriceSnapshot, Quantity, LineTotal)
-                      VALUES
-                        (@InvoiceId, @ProductId, @ProductNameSnapshot, @UnitPriceSnapshot, @Quantity, @LineTotal)",
-                    new
-                    {
-                        InvoiceId = newInvoiceId,
-                        ProductId = request.NewProductId,
-                        ProductNameSnapshot = newProduct.Name,
-                        UnitPriceSnapshot = newProduct.SellingPrice,
-                        Quantity = request.NewQuantity,
-                        LineTotal = lineTotal
-                    },
-                    transaction: transaction,
-                    cancellationToken: cancellationToken));
+            // 6) إدخال الأصناف الجديدة في InvoiceItems وتخصيم كمياتها من الجدول الرئيسي للمنتجات
+            foreach (var item in validatedNewItems)
+            {
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        @"INSERT INTO InvoiceItems
+                            (InvoiceId, ProductId, ProductNameSnapshot, UnitPriceSnapshot, Quantity, LineTotal)
+                          VALUES
+                            (@InvoiceId, @ProductId, @ProductNameSnapshot, @UnitPriceSnapshot, @Quantity, @LineTotal)",
+                        new
+                        {
+                            InvoiceId = newInvoiceId,
+                            ProductId = item.Product.Id,
+                            ProductNameSnapshot = item.Product.Name,
+                            UnitPriceSnapshot = item.Product.SellingPrice,
+                            Quantity = item.Quantity,
+                            LineTotal = item.LineTotal
+                        },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
 
-            // 7) إنقاص مخزون الصنف الجديد
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    "UPDATE product SET Quantity = Quantity - @Qty WHERE Id = @ProductId",
-                    new { Qty = request.NewQuantity, ProductId = request.NewProductId },
-                    transaction: transaction,
-                    cancellationToken: cancellationToken));
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        "UPDATE product SET Quantity = Quantity - @Qty WHERE Id = @ProductId",
+                        new { Qty = item.Quantity, ProductId = item.Product.Id },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
+            }
 
-            // 8) إدخال سجل الإرجاع (Type = Exchange، مربوط بالفاتورة الجديدة)
+            // 7) إدخال سجل الإرجاع (Type = Exchange، مربوط بالفاتورة الجديدة)
             var returnId = await connection.ExecuteScalarAsync<long>(
                 new CommandDefinition(
                     @"INSERT INTO returns
@@ -159,7 +172,7 @@ public class ExchangeHandler : IRequestHandler<ExchangeCommand, ExchangeResult>
                     transaction: transaction,
                     cancellationToken: cancellationToken));
 
-            // 9) تعليم الفاتورة الأصلية (بدون أي تعديل آخر عليها)
+            // 8) تعليم الفاتورة الأصلية (HasReturn = 1)
             await connection.ExecuteAsync(
                 new CommandDefinition(
                     "UPDATE invoices SET HasReturn = 1 WHERE Id = @InvoiceId",

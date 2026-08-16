@@ -1,9 +1,8 @@
-namespace SupermarketSystem.Api.Features.Returns.Exchange;
+public record ExchangeItemDto(int ProductId, int Quantity);
 
 public record ExchangeRequestBody(
     int OldProductId,
     int QuantityReturned,
-    int NewProductId,
-    int NewQuantity,
+    List<ExchangeItemDto> NewItems,
     string? Reason
 );

@@ -2,12 +2,13 @@ using MediatR;
 
 namespace SupermarketSystem.Api.Features.Returns.Exchange;
 
+public record ExchangeItemInput(int ProductId, int Quantity);
+
 public record ExchangeCommand(
     long OriginalInvoiceId,
     int OldProductId,
     int QuantityReturned,
-    int NewProductId,
-    int NewQuantity,
+    List<ExchangeItemInput> NewItems,
     long EmployeeId,
     string? Reason
 ) : IRequest<ExchangeResult>;
