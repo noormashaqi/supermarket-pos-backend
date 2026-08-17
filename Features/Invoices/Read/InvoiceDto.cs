@@ -12,9 +12,9 @@ public class InvoiceItemDto
 
 public class InvoiceDto
 {
-    public int Id { get; init; }
+    public long Id { get; init; }
     public string InvoiceNumber { get; init; } = string.Empty;
-    public int EmployeeId { get; init; }
+    public long EmployeeId { get; init; }
     public string EmployeeName { get; init; } = string.Empty;
     public DateTime Date { get; init; }
     public decimal TotalBeforeDiscount { get; init; }

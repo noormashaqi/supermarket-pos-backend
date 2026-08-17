@@ -39,9 +39,9 @@ public class InvoicesController : ControllerBase
         return CreatedAtAction(nameof(GetInvoiceById), new { id = result.InvoiceId }, result);
     }
 
-    [HttpGet("{id:int}")]
+    [HttpGet("{id:long}")]
     [PermissionRequirement(PermissionKeys.InvoicesView)]
-    public async Task<IActionResult> GetInvoiceById(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetInvoiceById(long id, CancellationToken cancellationToken)
     {
         var invoice = await _mediator.Send(new GetInvoiceByIdQuery(id), cancellationToken);
         return invoice is null ? NotFound() : Ok(invoice);

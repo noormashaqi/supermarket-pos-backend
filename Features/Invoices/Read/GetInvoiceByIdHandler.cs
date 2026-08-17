@@ -19,10 +19,10 @@ public class GetInvoiceByIdHandler : IRequestHandler<GetInvoiceByIdQuery, Invoic
 
         var invoiceRows = (await connection.QueryAsync<InvoiceHeaderRow>(
             new CommandDefinition(
-                @"SELECT i.Id, i.InvoiceNumber, i.EmployeeId, e.FullName AS EmployeeName,
+                @"SELECT i.Id, i.InvoiceNumber, i.EmployeeId, COALESCE(e.FullName, 'Staff') AS EmployeeName,
                          i.Date, i.TotalBeforeDiscount, i.DiscountPercentage, i.TotalAfterDiscount, i.HasReturn
                   FROM Invoices i
-                  JOIN Employees e ON e.Id = i.EmployeeId
+                  LEFT JOIN Employees e ON e.Id = i.EmployeeId
                   WHERE i.Id = @Id",
                 new { request.Id },
                 cancellationToken: cancellationToken))).ToList();
@@ -57,9 +57,9 @@ public class GetInvoiceByIdHandler : IRequestHandler<GetInvoiceByIdQuery, Invoic
 
 file class InvoiceHeaderRow
 {
-    public int Id { get; init; }
+    public long Id { get; init; }
     public string InvoiceNumber { get; init; } = string.Empty;
-    public int EmployeeId { get; init; }
+    public long EmployeeId { get; init; }
     public string EmployeeName { get; init; } = string.Empty;
     public DateTime Date { get; init; }
     public decimal TotalBeforeDiscount { get; init; }

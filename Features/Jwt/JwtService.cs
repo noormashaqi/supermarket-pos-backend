@@ -36,8 +36,8 @@ public class JwtService : IJwtService
         };
 
         // كل صلاحية بتنحط كـ Claim منفصل بنفس النوع "permission"
-        // عشان لاحقًا نقدر نسأل: هل عند هاد الموظف صلاحية معينة؟
         claims.AddRange(permissions.Select(p => new Claim("permission", p)));
+        claims.AddRange(permissions.Select(p => new Claim("permissions", p)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

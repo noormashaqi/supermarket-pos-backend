@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text;
 using Dapper;
 using MediatR;
@@ -20,10 +21,10 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
 
         var invoiceHeader = await connection.QuerySingleOrDefaultAsync<InvoiceHeaderDto>(
             new CommandDefinition(
-                @"SELECT i.Id AS InvoiceId, i.InvoiceNumber, e.FullName AS EmployeeName,
+                @"SELECT i.Id AS InvoiceId, i.InvoiceNumber, COALESCE(e.FullName, 'Staff') AS EmployeeName,
                          i.Date, i.TotalBeforeDiscount, i.DiscountPercentage, i.TotalAfterDiscount, i.HasReturn
                   FROM Invoices i
-                  INNER JOIN Employees e ON e.Id = i.EmployeeId
+                  LEFT JOIN Employees e ON e.Id = i.EmployeeId
                   WHERE i.Id = @Id",
                 new { request.Id },
                 cancellationToken: cancellationToken));
@@ -40,13 +41,15 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
                 cancellationToken: cancellationToken))).ToList();
 
         var discountAmount = invoiceHeader.TotalBeforeDiscount - invoiceHeader.TotalAfterDiscount;
+        var encodedInvoiceNumber = WebUtility.HtmlEncode(invoiceHeader.InvoiceNumber);
+        var encodedEmployeeName = WebUtility.HtmlEncode(invoiceHeader.EmployeeName);
 
         var htmlBuilder = new StringBuilder();
         htmlBuilder.AppendLine("<!DOCTYPE html>");
         htmlBuilder.AppendLine("<html dir='ltr' lang='en'>");
         htmlBuilder.AppendLine("<head>");
         htmlBuilder.AppendLine("    <meta charset='UTF-8'>");
-        htmlBuilder.AppendLine($"    <title>Invoice #{invoiceHeader.InvoiceNumber}</title>");
+        htmlBuilder.AppendLine($"    <title>Invoice #{encodedInvoiceNumber}</title>");
         htmlBuilder.AppendLine("    <style>");
         htmlBuilder.AppendLine("        body { font-family: 'Courier New', Courier, monospace, sans-serif; width: 80mm; margin: 0 auto; padding: 10px; color: #000; background: #fff; font-size: 13px; }");
         htmlBuilder.AppendLine("        .text-center { text-align: center; }");
@@ -76,12 +79,12 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
         htmlBuilder.AppendLine("    <div class='header text-center'>");
         htmlBuilder.AppendLine("        <h2>SUPERMARKET</h2>");
         htmlBuilder.AppendLine("        <div>Sales Receipt</div>");
-        htmlBuilder.AppendLine($"        <div class='inv-number'>Invoice #{invoiceHeader.InvoiceNumber}</div>");
+        htmlBuilder.AppendLine($"        <div class='inv-number'>Invoice #{encodedInvoiceNumber}</div>");
         htmlBuilder.AppendLine("    </div>");
 
         htmlBuilder.AppendLine("    <table class='info-table'>");
         htmlBuilder.AppendLine($"        <tr><td><strong>Date & Time:</strong></td><td class='text-right'>{invoiceHeader.Date:yyyy-MM-dd HH:mm:ss}</td></tr>");
-        htmlBuilder.AppendLine($"        <tr><td><strong>Cashier:</strong></td><td class='text-right'>{invoiceHeader.EmployeeName}</td></tr>");
+        htmlBuilder.AppendLine($"        <tr><td><strong>Cashier:</strong></td><td class='text-right'>{encodedEmployeeName}</td></tr>");
         htmlBuilder.AppendLine("        <tr><td><strong>Payment Method:</strong></td><td class='text-right'>Cash</td></tr>");
         htmlBuilder.AppendLine("    </table>");
 
@@ -98,8 +101,9 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
 
         foreach (var item in items)
         {
+            var encodedProductName = WebUtility.HtmlEncode(item.ProductName);
             htmlBuilder.AppendLine("            <tr>");
-            htmlBuilder.AppendLine($"                <td>{item.ProductName}</td>");
+            htmlBuilder.AppendLine($"                <td>{encodedProductName}</td>");
             htmlBuilder.AppendLine($"                <td class='text-center'>{item.Quantity}</td>");
             htmlBuilder.AppendLine($"                <td class='text-right'>{item.UnitPrice:N2}</td>");
             htmlBuilder.AppendLine($"                <td class='text-right'>{item.LineTotal:N2}</td>");
