@@ -88,9 +88,4 @@ dotnet run --project SupermarketSystem.Api.csproj
 | `products.view` | استعراض قائمة المنتجات |
 | `products.create` / `products.update` | إضافة وتعديل أصناف المنتجات |
 | `employees.create` / `employees.manage_permissions` | إدارة الموظفين وصلاحياتهم |
-
----
-
-## 📝 ترخيص المشروع (License)
-
-تم تطوير هذا المشروع لصالح نظام نقاط البيع بالسوبرماركت. جميع الحقوق محفوظة © 2026.
+.
