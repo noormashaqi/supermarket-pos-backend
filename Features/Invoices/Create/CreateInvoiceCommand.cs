@@ -2,7 +2,7 @@ using MediatR;
 
 namespace SupermarketSystem.Api.Features.Invoices.Create;
 
-public record CreateInvoiceItemDto(int ProductId, int Quantity);
+public record CreateInvoiceItemDto(int ProductId, int Quantity, decimal? UnitPrice = null);
 
 public record CreateInvoiceCommand(
     int EmployeeId,

@@ -37,6 +37,7 @@ public static class PermissionKeys
     public const string InvoicesView = "invoices.view";
     public const string InvoicesReturn = "invoices.return";
     public const string InvoicesExchange = "invoices.exchange";
+    public const string InvoicesOverridePrice = "invoices.override_price";
 
     // Returns
     public const string ReturnsExchange = "returns.exchange";
@@ -73,6 +74,7 @@ public static class PermissionKeys
         InvoicesView,
         InvoicesReturn,
         InvoicesExchange,
+        InvoicesOverridePrice,
         ReturnsExchange,
         
         ReportsView,
