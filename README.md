@@ -188,8 +188,8 @@ Authenticated requests must include a Bearer token issued by `POST /api/auth/log
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-org>/BackendRepo.git
-cd BackendRepo/SupermarketSystem.Api
+git clone https://github.com/noormashaqi/supermarket-pos-backend.git
+cd supermarket-pos-backend/SupermarketSystem.Api
 ```
 
 ### 2. Configure the environment
