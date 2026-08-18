@@ -164,4 +164,64 @@ catch (Exception ex)
     Console.WriteLine($"Error running startup migration for HeldInvoices: {ex.Message}");
 }
 
+// 8️⃣ تهيئة جداول العملاء والديون عند بدء التشغيل
+try
+{
+    using var scope = app.Services.CreateScope();
+    var connectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+    using var connection = connectionFactory.CreateConnection();
+    connection.Open();
+
+    // Create Customers table
+    const string createCustomersSql = """
+        CREATE TABLE IF NOT EXISTS Customers (
+            Id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            FullName VARCHAR(150) NOT NULL,
+            Nickname VARCHAR(100) NULL,
+            PhoneNumber VARCHAR(20) NULL,
+            CurrentBalance DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+            CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """;
+    connection.Execute(createCustomersSql);
+
+    // Create CustomerPayments table
+    const string createPaymentsSql = """
+        CREATE TABLE IF NOT EXISTS CustomerPayments (
+            Id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            CustomerId BIGINT NOT NULL,
+            Amount DECIMAL(12,2) NOT NULL,
+            EmployeeId BIGINT NOT NULL,
+            PaidAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            Notes VARCHAR(255) NULL,
+            CONSTRAINT FK_CustomerPayments_Customer FOREIGN KEY (CustomerId) REFERENCES Customers(Id),
+            CONSTRAINT FK_CustomerPayments_Employee FOREIGN KEY (EmployeeId) REFERENCES Employees(Id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """;
+    connection.Execute(createPaymentsSql);
+
+    // Add debt columns to Invoices (safe — checks if column exists first)
+    var columns = connection.Query<string>(
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Invoices'");
+    var columnSet = new HashSet<string>(columns, StringComparer.OrdinalIgnoreCase);
+
+    if (!columnSet.Contains("CustomerId"))
+    {
+        connection.Execute("ALTER TABLE Invoices ADD COLUMN CustomerId BIGINT NULL AFTER HasReturn");
+        connection.Execute("ALTER TABLE Invoices ADD CONSTRAINT FK_Invoices_Customer FOREIGN KEY (CustomerId) REFERENCES Customers(Id)");
+    }
+    if (!columnSet.Contains("PaymentMethod"))
+    {
+        connection.Execute("ALTER TABLE Invoices ADD COLUMN PaymentMethod VARCHAR(10) NOT NULL DEFAULT 'Cash' AFTER CustomerId");
+    }
+    if (!columnSet.Contains("PaymentStatus"))
+    {
+        connection.Execute("ALTER TABLE Invoices ADD COLUMN PaymentStatus VARCHAR(10) NOT NULL DEFAULT 'Paid' AFTER PaymentMethod");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error running startup migration for Customers/Debt: {ex.Message}");
+}
+
 app.Run();

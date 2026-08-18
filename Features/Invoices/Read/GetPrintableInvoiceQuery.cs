@@ -11,6 +11,9 @@ public class PrintableInvoiceDto
     public string EmployeeName { get; init; } = string.Empty;
     public DateTime Date { get; init; }
     public string PaymentMethod { get; init; } = "Cash";
+    public string PaymentStatus { get; init; } = "Paid";
+    public string? CustomerNickname { get; init; }
+    public decimal? OutstandingBalance { get; init; }
     public decimal TotalBeforeDiscount { get; init; }
     public decimal DiscountPercentage { get; init; }
     public decimal DiscountAmount { get; init; }

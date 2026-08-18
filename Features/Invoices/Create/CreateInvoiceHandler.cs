@@ -22,6 +22,8 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
 
         try
         {
+            var isDebt = string.Equals(request.PaymentMethod, "Debt", StringComparison.OrdinalIgnoreCase);
+
             // 1) قفل المنتجات المطلوبة وجلب السعر/الكمية/الحالة الحالية
             var groupedItems = request.Items
                 .GroupBy(i => i.ProductId)
@@ -94,6 +96,43 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
                 }
             }
 
+            // 2.5) التحقق من صلاحية البيع بالدين والعميل
+            if (isDebt)
+            {
+                // Check debt_sale permission
+                var empRole = await connection.ExecuteScalarAsync<string>(
+                    new CommandDefinition(
+                        "SELECT Role FROM Employees WHERE Id = @EmployeeId",
+                        new { request.EmployeeId },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
+
+                if (!string.Equals(empRole, "Admin", StringComparison.OrdinalIgnoreCase))
+                {
+                    var debtPermCount = await connection.ExecuteScalarAsync<int>(
+                        new CommandDefinition(
+                            "SELECT COUNT(1) FROM EmployeePermissions WHERE EmployeeId = @EmployeeId AND PermissionKey = @PermKey",
+                            new { request.EmployeeId, PermKey = PermissionKeys.InvoicesDebtSale },
+                            transaction: transaction,
+                            cancellationToken: cancellationToken));
+
+                    if (debtPermCount == 0)
+                        throw new UnauthorizedAccessException(
+                            $"Employee {request.EmployeeId} does not have permission to create debt sales.");
+                }
+
+                // Verify customer exists
+                var customerExists = await connection.ExecuteScalarAsync<int>(
+                    new CommandDefinition(
+                        "SELECT COUNT(1) FROM Customers WHERE Id = @CustomerId",
+                        new { request.CustomerId },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
+
+                if (customerExists == 0)
+                    throw new InvalidOperationException($"Customer with id {request.CustomerId} not found.");
+            }
+
             // 3) توليد InvoiceNumber (تاريخ اليوم + رقم متسلسل يصفر يوميًا)
             var today = DateTime.UtcNow.Date;
             var todayPrefix = today.ToString("yyyyMMdd");
@@ -127,12 +166,15 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
             var totalAfterDiscount = totalBeforeDiscount * (1 - request.DiscountPercentage / 100m);
 
             // 5) إدخال الفاتورة
+            var paymentMethod = isDebt ? "Debt" : "Cash";
+            var paymentStatus = isDebt ? "Unpaid" : "Paid";
+
             var invoiceId = await connection.ExecuteScalarAsync<int>(
                 new CommandDefinition(
                     @"INSERT INTO Invoices
-                        (InvoiceNumber, EmployeeId, Date, TotalBeforeDiscount, DiscountPercentage, TotalAfterDiscount, HasReturn)
+                        (InvoiceNumber, EmployeeId, Date, TotalBeforeDiscount, DiscountPercentage, TotalAfterDiscount, HasReturn, CustomerId, PaymentMethod, PaymentStatus)
                       VALUES
-                        (@InvoiceNumber, @EmployeeId, @Date, @TotalBeforeDiscount, @DiscountPercentage, @TotalAfterDiscount, FALSE);
+                        (@InvoiceNumber, @EmployeeId, @Date, @TotalBeforeDiscount, @DiscountPercentage, @TotalAfterDiscount, FALSE, @CustomerId, @PaymentMethod, @PaymentStatus);
                       SELECT LAST_INSERT_ID();",
                     new
                     {
@@ -141,7 +183,10 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
                         Date = DateTime.UtcNow,
                         TotalBeforeDiscount = totalBeforeDiscount,
                         request.DiscountPercentage,
-                        TotalAfterDiscount = totalAfterDiscount
+                        TotalAfterDiscount = totalAfterDiscount,
+                        CustomerId = isDebt ? request.CustomerId : null,
+                        PaymentMethod = paymentMethod,
+                        PaymentStatus = paymentStatus
                     },
                     transaction: transaction,
                     cancellationToken: cancellationToken));
@@ -171,6 +216,17 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
                     new CommandDefinition(
                         "UPDATE Product SET Quantity = Quantity - @Qty WHERE Id = @ProductId",
                         new { Qty = line.Quantity, line.ProductId },
+                        transaction: transaction,
+                        cancellationToken: cancellationToken));
+            }
+
+            // 7) إذا كانت الفاتورة بالدين، نضيف المبلغ على رصيد العميل
+            if (isDebt)
+            {
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        "UPDATE Customers SET CurrentBalance = CurrentBalance + @Amount WHERE Id = @CustomerId",
+                        new { Amount = totalAfterDiscount, request.CustomerId },
                         transaction: transaction,
                         cancellationToken: cancellationToken));
             }

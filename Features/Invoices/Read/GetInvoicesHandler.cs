@@ -20,7 +20,7 @@ public class GetInvoicesHandler : IRequestHandler<GetInvoicesQuery, List<Invoice
 
         var sql = new StringBuilder(@"
             SELECT DISTINCT i.Id, i.InvoiceNumber, i.EmployeeId, e.FullName AS EmployeeName,
-                   i.Date, i.TotalAfterDiscount, i.HasReturn
+                   i.Date, i.TotalAfterDiscount, i.HasReturn, i.PaymentMethod, i.PaymentStatus
             FROM Invoices i
             JOIN Employees e ON e.Id = i.EmployeeId");
 

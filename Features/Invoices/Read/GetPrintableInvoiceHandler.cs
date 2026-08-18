@@ -22,9 +22,13 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
         var invoiceHeader = await connection.QuerySingleOrDefaultAsync<InvoiceHeaderDto>(
             new CommandDefinition(
                 @"SELECT i.Id AS InvoiceId, i.InvoiceNumber, COALESCE(e.FullName, 'Staff') AS EmployeeName,
-                         i.Date, i.TotalBeforeDiscount, i.DiscountPercentage, i.TotalAfterDiscount, i.HasReturn
+                         i.Date, i.TotalBeforeDiscount, i.DiscountPercentage, i.TotalAfterDiscount, i.HasReturn,
+                         i.PaymentMethod, i.PaymentStatus, i.CustomerId,
+                         COALESCE(c.Nickname, c.FullName) AS CustomerNickname,
+                         c.CurrentBalance AS OutstandingBalance
                   FROM Invoices i
                   LEFT JOIN Employees e ON e.Id = i.EmployeeId
+                  LEFT JOIN Customers c ON c.Id = i.CustomerId
                   WHERE i.Id = @Id",
                 new { request.Id },
                 cancellationToken: cancellationToken));
@@ -43,6 +47,7 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
         var discountAmount = invoiceHeader.TotalBeforeDiscount - invoiceHeader.TotalAfterDiscount;
         var encodedInvoiceNumber = WebUtility.HtmlEncode(invoiceHeader.InvoiceNumber);
         var encodedEmployeeName = WebUtility.HtmlEncode(invoiceHeader.EmployeeName);
+        var isDebt = string.Equals(invoiceHeader.PaymentMethod, "Debt", StringComparison.OrdinalIgnoreCase);
 
         var htmlBuilder = new StringBuilder();
         htmlBuilder.AppendLine("<!DOCTYPE html>");
@@ -66,6 +71,7 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
         htmlBuilder.AppendLine("        .totals-table { width: 100%; margin-top: 8px; border-top: 2px dashed #000; padding-top: 6px; }");
         htmlBuilder.AppendLine("        .totals-table td { padding: 3px 0; }");
         htmlBuilder.AppendLine("        .net-total { font-size: 16px; font-weight: bold; border-top: 1px solid #000; border-bottom: 2px solid #000; padding: 6px 0; }");
+        htmlBuilder.AppendLine("        .debt-info { margin-top: 8px; padding: 6px; border: 2px solid #000; background: #fff3cd; font-size: 12px; }");
         htmlBuilder.AppendLine("        .footer { margin-top: 12px; border-top: 1px dashed #000; padding-top: 8px; font-size: 11px; }");
         htmlBuilder.AppendLine("        @media print { body { width: 100%; margin: 0; padding: 0; } .no-print { display: none; } }");
         htmlBuilder.AppendLine("    </style>");
@@ -85,7 +91,14 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
         htmlBuilder.AppendLine("    <table class='info-table'>");
         htmlBuilder.AppendLine($"        <tr><td><strong>Date & Time:</strong></td><td class='text-right'>{invoiceHeader.Date:yyyy-MM-dd HH:mm:ss}</td></tr>");
         htmlBuilder.AppendLine($"        <tr><td><strong>Cashier:</strong></td><td class='text-right'>{encodedEmployeeName}</td></tr>");
-        htmlBuilder.AppendLine("        <tr><td><strong>Payment Method:</strong></td><td class='text-right'>Cash</td></tr>");
+        htmlBuilder.AppendLine($"        <tr><td><strong>Payment Method:</strong></td><td class='text-right'>{(isDebt ? "DEBT" : "Cash")}</td></tr>");
+
+        if (isDebt && invoiceHeader.CustomerNickname is not null)
+        {
+            var encodedCustomerName = WebUtility.HtmlEncode(invoiceHeader.CustomerNickname);
+            htmlBuilder.AppendLine($"        <tr><td><strong>Customer:</strong></td><td class='text-right'>{encodedCustomerName}</td></tr>");
+        }
+
         htmlBuilder.AppendLine("    </table>");
 
         htmlBuilder.AppendLine("    <table class='items-table'>");
@@ -122,8 +135,20 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
             htmlBuilder.AppendLine($"        <tr><td>Discount Amount:</td><td class='text-right'>-{discountAmount:N2}</td></tr>");
         }
 
-        htmlBuilder.AppendLine($"        <tr class='net-total'><td>Total Payable (Cash):</td><td class='text-right'>{invoiceHeader.TotalAfterDiscount:N2}</td></tr>");
+        var totalLabel = isDebt ? "Total (DEBT)" : "Total Payable (Cash)";
+        htmlBuilder.AppendLine($"        <tr class='net-total'><td>{totalLabel}:</td><td class='text-right'>{invoiceHeader.TotalAfterDiscount:N2}</td></tr>");
         htmlBuilder.AppendLine("    </table>");
+
+        // Debt info section
+        if (isDebt && invoiceHeader.OutstandingBalance.HasValue)
+        {
+            htmlBuilder.AppendLine("    <div class='debt-info'>");
+            htmlBuilder.AppendLine($"        <strong>Payment Status:</strong> DEBT<br>");
+            if (invoiceHeader.CustomerNickname is not null)
+                htmlBuilder.AppendLine($"        <strong>Customer:</strong> {WebUtility.HtmlEncode(invoiceHeader.CustomerNickname)}<br>");
+            htmlBuilder.AppendLine($"        <strong>Outstanding Balance:</strong> {invoiceHeader.OutstandingBalance.Value:N2}");
+            htmlBuilder.AppendLine("    </div>");
+        }
 
         htmlBuilder.AppendLine("    <div class='footer text-center'>");
         htmlBuilder.AppendLine("        <p>Thank you for shopping with us!</p>");
@@ -143,7 +168,10 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
             InvoiceNumber = invoiceHeader.InvoiceNumber,
             EmployeeName = invoiceHeader.EmployeeName,
             Date = invoiceHeader.Date,
-            PaymentMethod = "Cash",
+            PaymentMethod = invoiceHeader.PaymentMethod,
+            PaymentStatus = invoiceHeader.PaymentStatus,
+            CustomerNickname = invoiceHeader.CustomerNickname,
+            OutstandingBalance = invoiceHeader.OutstandingBalance,
             TotalBeforeDiscount = invoiceHeader.TotalBeforeDiscount,
             DiscountPercentage = invoiceHeader.DiscountPercentage,
             DiscountAmount = discountAmount,
@@ -164,5 +192,10 @@ public class GetPrintableInvoiceHandler : IRequestHandler<GetPrintableInvoiceQue
         public decimal DiscountPercentage { get; init; }
         public decimal TotalAfterDiscount { get; init; }
         public bool HasReturn { get; init; }
+        public string PaymentMethod { get; init; } = "Cash";
+        public string PaymentStatus { get; init; } = "Paid";
+        public long? CustomerId { get; init; }
+        public string? CustomerNickname { get; init; }
+        public decimal? OutstandingBalance { get; init; }
     }
 }

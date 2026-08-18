@@ -38,6 +38,12 @@ public static class PermissionKeys
     public const string InvoicesReturn = "invoices.return";
     public const string InvoicesExchange = "invoices.exchange";
     public const string InvoicesOverridePrice = "invoices.override_price";
+    public const string InvoicesDebtSale = "invoices.debt_sale";
+
+    // Customers
+    public const string CustomersView = "customers.view";
+    public const string CustomersCreate = "customers.create";
+    public const string CustomersRecordPayment = "customers.record_payment";
 
     // Returns
     public const string ReturnsExchange = "returns.exchange";
@@ -75,7 +81,12 @@ public static class PermissionKeys
         InvoicesReturn,
         InvoicesExchange,
         InvoicesOverridePrice,
+        InvoicesDebtSale,
         ReturnsExchange,
+
+        CustomersView,
+        CustomersCreate,
+        CustomersRecordPayment,
         
         ReportsView,
         DashboardView

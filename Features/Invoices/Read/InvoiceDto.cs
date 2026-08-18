@@ -21,5 +21,9 @@ public class InvoiceDto
     public decimal DiscountPercentage { get; init; }
     public decimal TotalAfterDiscount { get; init; }
     public bool HasReturn { get; init; }
+    public string PaymentMethod { get; init; } = "Cash";
+    public string PaymentStatus { get; init; } = "Paid";
+    public long? CustomerId { get; init; }
+    public string? CustomerName { get; init; }
     public List<InvoiceItemDto> Items { get; init; } = new();
 }

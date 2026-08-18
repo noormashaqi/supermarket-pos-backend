@@ -11,6 +11,8 @@ public class InvoiceListItemDto
     public DateTime Date { get; init; }
     public decimal TotalAfterDiscount { get; init; }
     public bool HasReturn { get; init; }
+    public string PaymentMethod { get; init; } = "Cash";
+    public string PaymentStatus { get; init; } = "Paid";
 }
 
 public record GetInvoicesQuery(

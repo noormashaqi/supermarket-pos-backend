@@ -20,9 +20,12 @@ public class GetInvoiceByIdHandler : IRequestHandler<GetInvoiceByIdQuery, Invoic
         var invoiceRows = (await connection.QueryAsync<InvoiceHeaderRow>(
             new CommandDefinition(
                 @"SELECT i.Id, i.InvoiceNumber, i.EmployeeId, COALESCE(e.FullName, 'Staff') AS EmployeeName,
-                         i.Date, i.TotalBeforeDiscount, i.DiscountPercentage, i.TotalAfterDiscount, i.HasReturn
+                         i.Date, i.TotalBeforeDiscount, i.DiscountPercentage, i.TotalAfterDiscount, i.HasReturn,
+                         i.PaymentMethod, i.PaymentStatus, i.CustomerId,
+                         COALESCE(c.Nickname, c.FullName) AS CustomerName
                   FROM Invoices i
                   LEFT JOIN Employees e ON e.Id = i.EmployeeId
+                  LEFT JOIN Customers c ON c.Id = i.CustomerId
                   WHERE i.Id = @Id",
                 new { request.Id },
                 cancellationToken: cancellationToken))).ToList();
@@ -50,6 +53,10 @@ public class GetInvoiceByIdHandler : IRequestHandler<GetInvoiceByIdQuery, Invoic
             DiscountPercentage = header.DiscountPercentage,
             TotalAfterDiscount = header.TotalAfterDiscount,
             HasReturn = header.HasReturn,
+            PaymentMethod = header.PaymentMethod,
+            PaymentStatus = header.PaymentStatus,
+            CustomerId = header.CustomerId,
+            CustomerName = header.CustomerName,
             Items = items
         };
     }
@@ -66,4 +73,8 @@ file class InvoiceHeaderRow
     public decimal DiscountPercentage { get; init; }
     public decimal TotalAfterDiscount { get; init; }
     public bool HasReturn { get; init; }
+    public string PaymentMethod { get; init; } = "Cash";
+    public string PaymentStatus { get; init; } = "Paid";
+    public long? CustomerId { get; init; }
+    public string? CustomerName { get; init; }
 }
