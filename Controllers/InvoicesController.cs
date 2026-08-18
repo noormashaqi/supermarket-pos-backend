@@ -9,6 +9,7 @@ using SupermarketSystem.Api.Features.Invoices.Create;
 using SupermarketSystem.Api.Features.Invoices.Read;
 using SupermarketSystem.Api.Features.Returns.PureReturn;
 using SupermarketSystem.Api.Features.Returns.Exchange;
+using SupermarketSystem.Api.Features.Invoices.Hold;
 
 namespace SupermarketSystem.Api.Controllers;
 
@@ -121,6 +122,56 @@ public class InvoicesController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("hold")]
+    [PermissionRequirement(PermissionKeys.InvoicesCreate)]
+    public async Task<IActionResult> HoldInvoice(
+        [FromBody] HoldInvoiceRequestBody body,
+        CancellationToken cancellationToken)
+    {
+        var employeeId = GetCurrentEmployeeId();
+        if (employeeId is null)
+            return Unauthorized();
+
+        var command = new HoldInvoiceCommand(
+            employeeId.Value,
+            body.ReferenceTag,
+            body.CustomerName,
+            body.DiscountPercentage,
+            body.CartState
+        );
+        var result = await _mediator.Send(command, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("held")]
+    [PermissionRequirement(PermissionKeys.InvoicesView)]
+    public async Task<IActionResult> GetHeldInvoices(CancellationToken cancellationToken)
+    {
+        var employeeId = GetCurrentEmployeeId();
+        if (employeeId is null)
+            return Unauthorized();
+
+        var query = new GetHeldInvoicesQuery(employeeId.Value);
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpDelete("hold/{id:long}")]
+    [PermissionRequirement(PermissionKeys.InvoicesCreate)]
+    public async Task<IActionResult> DeleteHeldInvoice(long id, CancellationToken cancellationToken)
+    {
+        var employeeId = GetCurrentEmployeeId();
+        if (employeeId is null)
+            return Unauthorized();
+
+        var command = new DeleteHeldInvoiceCommand(id, employeeId.Value);
+        var success = await _mediator.Send(command, cancellationToken);
+        if (!success)
+            return NotFound(new { message = $"Held invoice with id {id} not found or belongs to another cashier." });
+
+        return NoContent();
+    }
+
     private long? GetCurrentEmployeeId()
     {
         var employeeIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)
@@ -131,3 +182,10 @@ public class InvoicesController : ControllerBase
             : null;
     }
 }
+
+public record HoldInvoiceRequestBody(
+    string ReferenceTag,
+    string? CustomerName,
+    string? DiscountPercentage,
+    string CartState
+);
