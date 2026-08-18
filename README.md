@@ -1,91 +1,69 @@
-# 🛒 نظام نقاط البيع وإدارة السوبرماركت (Supermarket POS System) - Backend API
+# 🛒 Supermarket POS System - Backend API
 
-مشروع خادم API عالي الأداء والإنتاجية لبناء وإدارة السوبرماركت ونقاط البيع (POS). مبني بأحدث تقنيات **.NET 10** ونمط **CQRS** لتنفيذ جميع العمليات المالية والمخزنية بأمان وسرعة عالية.
+A high-performance backend Web API for managing sales, cashier operations, inventory transactions, invoices, employees, and financial reports in a supermarket environment.
 
----
-
-## 🛠️ التقنيات المستخدمة (Tech Stack)
-
-- **الإطار البرمجي**: ASP.NET Core 10 (Web API)
-- **نمط التصميم**: CQRS Pattern باستخدام مكتبة **MediatR**
-- **وصول البيانات**: Dapper (Micro-ORM) لأفضل أداء في استعلامات SQL
-- **قاعدة البيانات**: MySQL / MariaDB
-- **التشفير والحماية**: 
-  - BCrypt.NET لتشفير كلمات المرور
-  - JWT (JSON Web Tokens) لإدارة الجلسات ووسوم الصلاحيات (Claims)
-- **التحقق من البيانات**: FluentValidation
-- **التوثيق وتطهير النصوص**: WebUtility.HtmlEncode لتأمين مخرجات الفواتير والطباعة
+Built with **.NET 10** using the **CQRS pattern** with **MediatR** and **Dapper Micro-ORM**, ensuring low latency, high throughput, and atomic transaction integrity for all POS operations.
 
 ---
 
-## ✨ المميزات الرئيسية (Key Features)
+## Overview
 
-### 1. 🧾 إدارة الفواتير والمبيعات (Invoices & POS)
-- **إنشاء الفواتير المباشرة**: حساب الخصومات والإجماليات بدقة مع تحديث المخزون لحظياً.
-- **تعديل السعر المباشر (Price Override)**: إمكانية تعديل سعر الصنف في السلة مع التحقق الأمني من صلاحية (`invoices.override_price`) أو موافقة المشرف.
-- **تعليق واسترجاع السلات (Hold/Resume Invoices)**: إمكانية إيقاف الطلب مؤقتاً لحين انتهاء الزبون واستكمال عملية التسوق ثم استرجاعه أو إغلاقه.
+The system provides the core business logic and API infrastructure for:
 
-### 2. ↩️ الإرجاع والتبديل (Returns & Exchange)
-- **الإرجاع النقي (Pure Return)**: إرجاع كلي أو جزئي للأصناف مع إعادة الكميات للمخزون وحساب المبالغ المستردة.
-- **التبديل الفوري (Product Exchange)**: إرجاع صنف وتعيين أصل بديلة في فاتورة جديدة في عملية واحدة متكاملة وذريّة (Atomic Transaction).
-
-### 3. 👥 إدارة الموظفين والصلاحيات (Employees & Permissions)
-- **إنشاء الموظفين الذري (Atomic Employee Creation)**: ربط الموظف بالدور والصلاحيات المناسبة فور إنشائه داخل `IDbTransaction` واحدة.
-- **نظام الصلاحيات الدقيق**: التحكم الكامل في الوصول لجميع أجزاء النظام عبر صلاحيات منفصلة (`invoices.create`, `products.view`, `sales.create`, إلخ).
-
-### 4. 🖨️ الطباعة الحرارية للفواتير (Printable HTML Receipt)
-- توليد شفرة HTML مخصصة للطابعات الحرارية (80mm) ولأوراق A4 مباشرة من قاعدة البيانات.
-- تطهير وترميز البيانات النصية ضد هجمات الخرق (XSS/Html Sanitize).
-
-### 5. 📊 التقارير والإحصائيات (Reports & Analytics)
-- تقارير المبيعات اليومية والدورية.
-- تقارير أداء الكاشيرية وحضور الموظفين.
-- تقارير حركة وتنقُّل المنتجات والمنتجات قريبة النفاد (Low Stock Alerts).
+* Fast, transaction-safe POS invoice creation and stock deduction.
+* Real-time item price override validation governed by permission claims.
+* Server-side hold and resume invoice management.
+* Pure product return and atomic product exchange workflows.
+* Customer ledger and debt sales management.
+* Atomic employee creation with role and fine-grained permission assignments.
+* Sanitized HTML generation for thermal receipt printing (80mm and A4).
+* Role-Based and Claim-Based Access Control (RBAC) via JWT authentication.
+* Sales analytics, inventory tracking, and employee attendance history.
 
 ---
 
-## 🚀 طريقة التشغيل (Setup & Execution)
+## Tech Stack
 
-### المتطلبات الأساسية:
-- **.NET 10 SDK**
-- **MySQL Server 8.0+**
-
-### الخطوات:
-1. قم بتهيئة قاعدة البيانات وإنشاء Schema باسم `supermarket_pos`.
-2. قم بتحديث سلسلة الاتصال (Connection String) في ملف `appsettings.json`:
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=supermarket_pos;Uid=root;Pwd=your_password;"
-  },
-  "Jwt": {
-    "Secret": "YourSuperSecretKeyHere_MustBeAtLeast32BytesLong!",
-    "Issuer": "SupermarketApi",
-    "Audience": "SupermarketClient",
-    "ExpiryMinutes": 480
-  }
-}
-```
-
-3. تشغيل الـ Migration وبناء المشروع:
-```bash
-dotnet restore
-dotnet build
-dotnet run --project SupermarketSystem.Api.csproj
-```
+* **.NET 10 SDK** - Core framework
+* **ASP.NET Core Web API** - RESTful API endpoints
+* **CQRS Pattern** - Command Query Responsibility Segregation via **MediatR**
+* **Dapper** - High-performance Micro-ORM for SQL operations
+* **MySQL / MariaDB** - Relational database
+* **BCrypt.NET-Next** - Secure password hashing
+* **System.IdentityModel.Tokens.Jwt** - JWT bearer token authentication and claims
+* **FluentValidation** - Automated request validation
+* **Swagger / OpenAPI** - Interactive API documentation
 
 ---
 
-## 🔒 هيكلية الصلاحيات (Permissions Overview)
+## Project Structure
 
-| مفتاح الصلاحية | الوصف |
-| :--- | :--- |
-| `invoices.create` | إنشاء الفواتير وإجراء عمليات البيع |
-| `invoices.view` | استعراض قائمة الفواتير وتفاصيلها |
-| `invoices.override_price` | تعديل أسعار المنتجات المباشرة أثناء البيع |
-| `invoices.return` | تنفيذ عمليات الإرجاع واسترداد المبالغ |
-| `invoices.exchange` | تنفيذ عمليات تبديل المنتجات |
-| `products.view` | استعراض قائمة المنتجات |
-| `products.create` / `products.update` | إضافة وتعديل أصناف المنتجات |
-| `employees.create` / `employees.manage_permissions` | إدارة الموظفين وصلاحياتهم |
-.
+```text
+supermarket-pos-backend/
+├── src/
+│   ├── SupermarketSystem.Api/
+│   │   ├── Controllers/
+│   │   ├── Middlewares/
+│   │   ├── Program.cs
+│   │   └── appsettings.json
+│   │
+│   ├── SupermarketSystem.Application/
+│   │   ├── Behaviors/
+│   │   ├── Commands/
+│   │   ├── DTOs/
+│   │   ├── Queries/
+│   │   └── Validators/
+│   │
+│   ├── SupermarketSystem.Domain/
+│   │   ├── Entities/
+│   │   └── Interfaces/
+│   │
+│   └── SupermarketSystem.Infrastructure/
+│       ├── Auth/
+│       ├── Data/
+│       └── Repositories/
+│
+├── database/
+│   └── schema.sql
+├── SupermarketSystem.sln
+└── README.md
