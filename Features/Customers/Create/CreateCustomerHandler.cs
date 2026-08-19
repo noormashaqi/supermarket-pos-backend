@@ -17,6 +17,20 @@ public class CreateCustomerHandler : IRequestHandler<CreateCustomerCommand, Crea
     {
         using var connection = _connectionFactory.CreateConnection();
 
+        var fullName = !string.IsNullOrWhiteSpace(request.FullName)
+            ? request.FullName
+            : (!string.IsNullOrWhiteSpace(request.Name)
+                ? request.Name
+                : (!string.IsNullOrWhiteSpace(request.Nickname) ? request.Nickname : "Customer"));
+
+        var nickname = !string.IsNullOrWhiteSpace(request.Nickname)
+            ? request.Nickname
+            : fullName;
+
+        var phone = !string.IsNullOrWhiteSpace(request.PhoneNumber)
+            ? request.PhoneNumber
+            : request.Phone;
+
         var id = await connection.ExecuteScalarAsync<long>(
             new CommandDefinition(
                 @"INSERT INTO Customers (FullName, Nickname, PhoneNumber)
@@ -24,12 +38,12 @@ public class CreateCustomerHandler : IRequestHandler<CreateCustomerCommand, Crea
                   SELECT LAST_INSERT_ID();",
                 new
                 {
-                    request.FullName,
-                    request.Nickname,
-                    request.PhoneNumber
+                    FullName = fullName,
+                    Nickname = nickname,
+                    PhoneNumber = phone
                 },
                 cancellationToken: cancellationToken));
 
-        return new CreateCustomerResult(id);
+        return new CreateCustomerResult(id, id, fullName, nickname, phone);
     }
 }

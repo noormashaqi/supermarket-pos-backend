@@ -30,7 +30,7 @@ public class CustomersController : ControllerBase
         CancellationToken cancellationToken)
     {
         var result = await _mediator.Send(command, cancellationToken);
-        return CreatedAtAction(nameof(GetCustomers), null, result);
+        return Ok(result);
     }
 
     [HttpGet]
