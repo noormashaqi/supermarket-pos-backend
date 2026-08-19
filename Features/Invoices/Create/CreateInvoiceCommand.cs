@@ -9,7 +9,8 @@ public record CreateInvoiceCommand(
     decimal DiscountPercentage,
     List<CreateInvoiceItemDto> Items,
     string? PaymentMethod = "Cash",
-    long? CustomerId = null
+    long? CustomerId = null,
+    long? DebtCustomerId = null
 ) : IRequest<CreateInvoiceResult>;
 
 public record CreateInvoiceResult(int InvoiceId, string InvoiceNumber);

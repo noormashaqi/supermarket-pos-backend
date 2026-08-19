@@ -11,5 +11,7 @@ public class CustomerDto
     public string? Nickname { get; init; }
     public string? PhoneNumber { get; init; }
     public decimal CurrentBalance { get; init; }
+    public decimal TotalOutstanding => CurrentBalance;
+    public decimal TotalDebt => CurrentBalance;
     public DateTime CreatedAt { get; init; }
 }

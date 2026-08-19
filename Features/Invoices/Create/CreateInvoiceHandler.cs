@@ -22,7 +22,8 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
 
         try
         {
-            var isDebt = string.Equals(request.PaymentMethod, "Debt", StringComparison.OrdinalIgnoreCase);
+            var targetCustomerId = request.CustomerId ?? request.DebtCustomerId;
+            var isDebt = string.Equals(request.PaymentMethod, "Debt", StringComparison.OrdinalIgnoreCase) || (targetCustomerId.HasValue && string.Equals(request.PaymentMethod, "Debt", StringComparison.OrdinalIgnoreCase));
 
             // 1) قفل المنتجات المطلوبة وجلب السعر/الكمية/الحالة الحالية
             var groupedItems = request.Items
@@ -121,16 +122,23 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
                             $"Employee {request.EmployeeId} does not have permission to create debt sales.");
                 }
 
-                // Verify customer exists
-                var customerExists = await connection.ExecuteScalarAsync<int>(
-                    new CommandDefinition(
-                        "SELECT COUNT(1) FROM Customers WHERE Id = @CustomerId",
-                        new { request.CustomerId },
-                        transaction: transaction,
-                        cancellationToken: cancellationToken));
+                // Verify customer exists if specified or required for debt
+                if (targetCustomerId.HasValue)
+                {
+                    var customerExists = await connection.ExecuteScalarAsync<int>(
+                        new CommandDefinition(
+                            "SELECT COUNT(1) FROM Customers WHERE Id = @CustomerId",
+                            new { CustomerId = targetCustomerId.Value },
+                            transaction: transaction,
+                            cancellationToken: cancellationToken));
 
-                if (customerExists == 0)
-                    throw new InvalidOperationException($"Customer with id {request.CustomerId} not found.");
+                    if (customerExists == 0)
+                        throw new InvalidOperationException($"Customer with id {targetCustomerId.Value} not found.");
+                }
+                else
+                {
+                    throw new InvalidOperationException("A customer must be selected to create a debt sale.");
+                }
             }
 
             // 3) توليد InvoiceNumber (تاريخ اليوم + رقم متسلسل يصفر يوميًا)
@@ -184,7 +192,7 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
                         TotalBeforeDiscount = totalBeforeDiscount,
                         request.DiscountPercentage,
                         TotalAfterDiscount = totalAfterDiscount,
-                        CustomerId = isDebt ? request.CustomerId : null,
+                        CustomerId = targetCustomerId,
                         PaymentMethod = paymentMethod,
                         PaymentStatus = paymentStatus
                     },
@@ -221,12 +229,12 @@ public class CreateInvoiceHandler : IRequestHandler<CreateInvoiceCommand, Create
             }
 
             // 7) إذا كانت الفاتورة بالدين، نضيف المبلغ على رصيد العميل
-            if (isDebt)
+            if (isDebt && targetCustomerId.HasValue)
             {
                 await connection.ExecuteAsync(
                     new CommandDefinition(
                         "UPDATE Customers SET CurrentBalance = CurrentBalance + @Amount WHERE Id = @CustomerId",
-                        new { Amount = totalAfterDiscount, request.CustomerId },
+                        new { Amount = totalAfterDiscount, CustomerId = targetCustomerId.Value },
                         transaction: transaction,
                         cancellationToken: cancellationToken));
             }
