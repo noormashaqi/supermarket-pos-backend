@@ -8,6 +8,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using SupermarketSystem.Api.Constants;
 using SupermarketSystem.Api.Data;
 using SupermarketSystem.Api.Interface;
 using SupermarketSystem.Api.Middleware;
@@ -222,6 +223,88 @@ try
 catch (Exception ex)
 {
     Console.WriteLine($"Error running startup migration for Customers/Debt: {ex.Message}");
+}
+
+// 9️⃣ تهيئة وتصحيح كلمة سر حساب الأدمن والـ Hash التلقائي عند بدء التشغيل
+try
+{
+    using var scope = app.Services.CreateScope();
+    var connectionFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+    using var connection = connectionFactory.CreateConnection();
+    connection.Open();
+
+    var defaultPassword = "123456789";
+    var freshAdminHash = BCrypt.Net.BCrypt.HashPassword(defaultPassword);
+
+    var existingUsers = connection.Query<(long Id, string Username, string PasswordHash, string Role)>(
+        "SELECT Id, Username, PasswordHash, Role FROM Employees WHERE Username IN ('admin', 'cashier1')").ToList();
+
+    var adminUser = existingUsers.FirstOrDefault(u => string.Equals(u.Username, "admin", StringComparison.OrdinalIgnoreCase));
+
+    long adminId;
+    if (adminUser.Id > 0)
+    {
+        adminId = adminUser.Id;
+        bool isValid = false;
+        try
+        {
+            isValid = BCrypt.Net.BCrypt.Verify(defaultPassword, adminUser.PasswordHash);
+        }
+        catch
+        {
+            isValid = false;
+        }
+
+        if (!isValid)
+        {
+            connection.Execute(
+                "UPDATE Employees SET PasswordHash = @Hash, IsActive = 1, Role = 'Admin' WHERE Id = @Id",
+                new { Hash = freshAdminHash, Id = adminId });
+        }
+    }
+    else
+    {
+        adminId = connection.ExecuteScalar<long>(
+            @"INSERT INTO Employees (FullName, Username, PasswordHash, Role, IsActive, CreatedAt)
+              VALUES ('Admin User', 'admin', @Hash, 'Admin', 1, UTC_TIMESTAMP());
+              SELECT LAST_INSERT_ID();",
+            new { Hash = freshAdminHash });
+    }
+
+    // Assign all permissions to Admin
+    foreach (var perm in PermissionKeys.All)
+    {
+        connection.Execute(
+            @"INSERT IGNORE INTO EmployeePermissions (EmployeeId, PermissionKey)
+              VALUES (@EmployeeId, @PermissionKey)",
+            new { EmployeeId = adminId, PermissionKey = perm });
+    }
+
+    // Fix cashier1 password hash as well if present
+    var cashierUser = existingUsers.FirstOrDefault(u => string.Equals(u.Username, "cashier1", StringComparison.OrdinalIgnoreCase));
+    if (cashierUser.Id > 0)
+    {
+        bool isCashierValid = false;
+        try
+        {
+            isCashierValid = BCrypt.Net.BCrypt.Verify(defaultPassword, cashierUser.PasswordHash);
+        }
+        catch
+        {
+            isCashierValid = false;
+        }
+
+        if (!isCashierValid)
+        {
+            connection.Execute(
+                "UPDATE Employees SET PasswordHash = @Hash, IsActive = 1 WHERE Id = @Id",
+                new { Hash = freshAdminHash, Id = cashierUser.Id });
+        }
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error running startup Admin seeder/hash fixer: {ex.Message}");
 }
 
 app.Run();
