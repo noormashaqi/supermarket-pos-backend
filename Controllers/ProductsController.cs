@@ -92,6 +92,17 @@ public class ProductsController : ControllerBase
         return Ok(updatedProduct ?? (object)new { id, isActive = false });
     }
 
+    [HttpPatch("{id}/activate")]
+    [HttpPut("{id}/activate")]
+    [HttpPost("{id}/activate")]
+    [PermissionRequirement(PermissionKeys.ProductsUpdate)]
+    public async Task<IActionResult> Activate(int id)
+    {
+        await _mediator.Send(new ActivateProductCommand { Id = id });
+        var updatedProduct = await _mediator.Send(new GetProductByIdQuery { Id = id });
+        return Ok(updatedProduct ?? (object)new { id, isActive = true });
+    }
+
     [HttpPost("{id}/stock/add")]
     [PermissionRequirement(PermissionKeys.ProductsStockAdd)]
     public async Task<IActionResult> AddStock(int id, [FromBody] AddStockCommand command)
