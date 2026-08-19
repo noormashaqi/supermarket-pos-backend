@@ -103,6 +103,14 @@ public class ProductsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("stock-history")]
+    [PermissionRequirement(PermissionKeys.ProductsView)]
+    public async Task<IActionResult> GetAllStockHistory([FromQuery] int? productId)
+    {
+        var result = await _mediator.Send(new GetStockHistoryQuery { ProductId = productId });
+        return Ok(result);
+    }
+
     [HttpGet("{id}/stock/history")]
     [PermissionRequirement(PermissionKeys.ProductsView)]
     public async Task<IActionResult> GetStockHistory(int id)

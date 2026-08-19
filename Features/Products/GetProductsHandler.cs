@@ -21,7 +21,7 @@ public class GetProductsHandler : IRequestHandler<GetProductsQuery, List<Product
 
         var sql = new StringBuilder(@"
             SELECT p.Id, p.Name, p.CategoryId, c.Name AS CategoryName,
-                   p.SellingPrice, p.Quantity, p.Unit, p.IsActive, p.CreatedAt
+                   p.SellingPrice, p.CostPrice, p.Quantity, p.Unit, p.IsActive, p.CreatedAt
             FROM Product p
             INNER JOIN Category c ON c.Id = p.CategoryId
             WHERE 1 = 1");

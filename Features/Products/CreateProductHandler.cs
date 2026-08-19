@@ -23,14 +23,15 @@ public class CreateProductHandler : IRequestHandler<CreateProductCommand, Produc
         try
         {
             var newId = await connection.QuerySingleAsync<int>(@"
-                INSERT INTO Product (Name, CategoryId, SellingPrice, Quantity, Unit, IsActive, CreatedAt)
-                VALUES (@Name, @CategoryId, @SellingPrice, @Quantity, @Unit, 1, UTC_TIMESTAMP());
+                INSERT INTO Product (Name, CategoryId, SellingPrice, CostPrice, Quantity, Unit, IsActive, CreatedAt)
+                VALUES (@Name, @CategoryId, @SellingPrice, @CostPrice, @Quantity, @Unit, 1, UTC_TIMESTAMP());
                 SELECT LAST_INSERT_ID();",
                 new
                 {
                     request.Name,
                     request.CategoryId,
                     request.SellingPrice,
+                    request.CostPrice,
                     request.Quantity,
                     request.Unit
                 },
@@ -63,6 +64,7 @@ public class CreateProductHandler : IRequestHandler<CreateProductCommand, Produc
                 CategoryId = request.CategoryId,
                 CategoryName = categoryName,
                 SellingPrice = request.SellingPrice,
+                CostPrice = request.CostPrice,
                 Quantity = request.Quantity,
                 Unit = request.Unit,
                 IsActive = true,

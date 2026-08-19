@@ -12,6 +12,7 @@ public class Product
     public string Name { get; set; } = string.Empty;
     public int CategoryId { get; set; }
     public decimal SellingPrice { get; set; }
+    public decimal CostPrice { get; set; }
     public int Quantity { get; set; }
     public ProductUnit Unit { get; set; }
     public bool IsActive { get; set; } = true;

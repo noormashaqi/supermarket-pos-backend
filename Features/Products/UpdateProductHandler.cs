@@ -24,6 +24,7 @@ public class UpdateProductHandler : IRequestHandler<UpdateProductCommand, Produc
             SET Name = @Name,
                 CategoryId = @CategoryId,
                 SellingPrice = @SellingPrice,
+                CostPrice = @CostPrice,
                 Unit = @Unit
             WHERE Id = @Id",
             new
@@ -32,12 +33,13 @@ public class UpdateProductHandler : IRequestHandler<UpdateProductCommand, Produc
                 request.Name,
                 request.CategoryId,
                 request.SellingPrice,
+                request.CostPrice,
                 request.Unit
             });
 
         var updated = await connection.QuerySingleAsync<ProductDto>(@"
             SELECT p.Id, p.Name, p.CategoryId, c.Name AS CategoryName,
-                   p.SellingPrice, p.Quantity, p.Unit, p.IsActive, p.CreatedAt
+                   p.SellingPrice, p.CostPrice, p.Quantity, p.Unit, p.IsActive, p.CreatedAt
             FROM Product p
             INNER JOIN Category c ON c.Id = p.CategoryId
             WHERE p.Id = @Id",

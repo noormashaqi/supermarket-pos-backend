@@ -20,7 +20,7 @@ public class GetProductByIdHandler : IRequestHandler<GetProductByIdQuery, Produc
 
         var product = await connection.QuerySingleOrDefaultAsync<ProductDto>(@"
             SELECT p.Id, p.Name, p.CategoryId, c.Name AS CategoryName,
-                   p.SellingPrice, p.Quantity, p.Unit, p.IsActive, p.CreatedAt
+                   p.SellingPrice, p.CostPrice, p.Quantity, p.Unit, p.IsActive, p.CreatedAt
             FROM Product p
             INNER JOIN Category c ON c.Id = p.CategoryId
             WHERE p.Id = @Id",

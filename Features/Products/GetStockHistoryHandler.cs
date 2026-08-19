@@ -19,10 +19,12 @@ public class GetStockHistoryHandler : IRequestHandler<GetStockHistoryQuery, List
         using var connection = _dbFactory.CreateConnection();
 
         var history = await connection.QueryAsync<StockHistoryDto>(@"
-            SELECT sh.QuantityAdded, e.FullName AS EmployeeName, sh.Date
+            SELECT sh.Id, sh.ProductId, p.Name AS ProductName, sh.QuantityAdded,
+                   sh.EmployeeId, COALESCE(e.FullName, 'Inventory Manager') AS EmployeeName, sh.Date
             FROM StockHistory sh
-            INNER JOIN Employees e ON e.Id = sh.EmployeeId
-            WHERE sh.ProductId = @ProductId
+            INNER JOIN Product p ON p.Id = sh.ProductId
+            LEFT JOIN Employees e ON e.Id = sh.EmployeeId
+            WHERE (@ProductId IS NULL OR @ProductId = 0 OR sh.ProductId = @ProductId)
             ORDER BY sh.Date DESC",
             new { request.ProductId });
 
