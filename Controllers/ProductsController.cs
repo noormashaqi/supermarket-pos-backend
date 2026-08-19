@@ -23,7 +23,7 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [PermissionRequirement(PermissionKeys.ProductsView)]
-    public async Task<IActionResult> GetAll([FromQuery] int? categoryId, [FromQuery] bool activeOnly = true)
+    public async Task<IActionResult> GetAll([FromQuery] int? categoryId, [FromQuery] bool activeOnly = false)
     {
         var result = await _mediator.Send(new GetProductsQuery
         {
@@ -82,11 +82,14 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPatch("{id}/deactivate")]
+    [HttpPut("{id}/deactivate")]
+    [HttpDelete("{id}")]
     [PermissionRequirement(PermissionKeys.ProductsDeactivate)]
     public async Task<IActionResult> Deactivate(int id)
     {
         await _mediator.Send(new DeactivateProductCommand { Id = id });
-        return NoContent();
+        var updatedProduct = await _mediator.Send(new GetProductByIdQuery { Id = id });
+        return Ok(updatedProduct ?? (object)new { id, isActive = false });
     }
 
     [HttpPost("{id}/stock/add")]
